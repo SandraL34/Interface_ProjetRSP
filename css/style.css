@@ -1,0 +1,258 @@
+/* Variables du thème sombre (par défaut) : toutes les couleurs de la page sont définies ici une seule fois */
+:root {
+  color-scheme: dark; /* indique au navigateur d'utiliser ses propres éléments (scrollbars...) en version sombre */
+  --bg: #0a1122;        /* couleur de fond de la page */
+  --surface: #101a33;   /* couleur de fond des cartes (panneau, mesures, journal...) */
+  --surface-2: #15223f; /* fond légèrement différent, utilisé pour le bandeau d'alerte */
+  --line: #22335a;      /* couleur des bordures et séparateurs */
+  --text: #e6edf8;      /* couleur du texte principal */
+  --muted: #8fa0bf;     /* couleur du texte secondaire (légendes, notes) */
+  --ok: #4fd8e8;      /* nominal */
+  --warn: #ffb547;    /* attention */
+  --crit: #ff6b6b;    /* critique */
+  --on-ok: #06202a; /* couleur du texte posé sur un fond --ok (ex : le bouton "Appliquer") */
+  --ok-ring: #4fd8e826; /* halo semi-transparent autour du point vert "connecté" */
+  --glow: #182a55; /* lueur douce en haut à droite de la page */
+  --track: #1b2a4d; /* fond des jauges/barres de progression */
+  /* schéma du panneau */
+  --sun: #ffb547; /* couleur du soleil dessiné */
+  --cell-bg: #123163; /* fond des cellules photovoltaïques du schéma */
+  --cell-line: #4a86d1; /* traits de séparation des cellules */
+  --wing-edge: #6fa3e6; /* contour des "ailes" du panneau */
+  --body-fill: #15223f; /* remplissage du coffre du panneau */
+  --body-stroke: #3a507f; /* contour du coffre */
+  --body-inner: #0d1730; /* intérieur (plus sombre) du coffre */
+  --mast: #22335a; /* couleur du mât/support */
+  --num: "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif; /* police pour les chiffres/valeurs */
+  --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; /* police pour le texte courant */
+}
+
+/* Variables réécrites quand data-theme="light" est posé sur <html> (voir js/theme-init.js et js/app.js) */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef2f9;
+  --surface: #ffffff;
+  --surface-2: #f1f5fc;
+  --line: #d3dcec;
+  --text: #14203a;
+  --muted: #5b6b88;
+  --ok: #0a7f92;
+  --warn: #a85f00;
+  --crit: #d22f3f;
+  --on-ok: #ffffff;
+  --ok-ring: #0a7f9226;
+  --glow: #dbe6fb;
+  --track: #dfe7f5;
+  --sun: #f59e0b;
+  --cell-bg: #cfe0f7;
+  --cell-line: #5f8fcf;
+  --wing-edge: #3f74bd;
+  --body-fill: #e4ebf7;
+  --body-stroke: #8ea3c7;
+  --body-inner: #f7f9fd;
+  --mast: #c3cfe4;
+}
+
+* { box-sizing: border-box; } /* les paddings/bordures ne s'ajoutent pas à la largeur/hauteur déclarée */
+
+body {
+  margin: 0; /* supprime la marge par défaut du navigateur */
+  min-height: 100vh; /* la page occupe au moins toute la hauteur de l'écran */
+  color: var(--text);
+  font: 15px/1.5 var(--ui); /* taille 15px, interligne 1.5, police définie plus haut */
+  background:
+    radial-gradient(1100px 520px at 88% -8%, var(--glow) 0%, transparent 62%), /* lueur décorative en haut à droite */
+    var(--bg);
+}
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 28px 20px 48px; } /* centre le contenu et limite sa largeur */
+
+/* ---------- En-tête ---------- */
+header { /* bandeau du haut : titre à gauche, horloge/badge/thème à droite */
+  display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: 12px 24px; margin-bottom: 24px;
+}
+h1 { margin: 0; font: 600 28px/1.1 var(--num); letter-spacing: .01em; }
+.subtitle { margin: 4px 0 0; color: var(--muted); }
+.head-right { display: flex; align-items: center; gap: 16px; } /* regroupe horloge, badge et bouton thème */
+.clock { font: 500 18px var(--num); font-variant-numeric: tabular-nums; color: var(--muted); } /* tabular-nums : les chiffres gardent la même largeur, l'horloge ne "tremble" pas */
+
+.pill { /* le badge de statut ("Connecté", "Mode démo"...) */
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; /* radius énorme = forme de pilule */
+  background: var(--surface); font-size: 14px;
+}
+.pill::before { /* le petit point coloré avant le texte du badge */
+  content: ""; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--muted); /* couleur par défaut, écrasée ci-dessous selon data-mode */
+}
+.pill[data-mode="live"]::before    { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-ring); } /* halo autour du point vert */
+.pill[data-mode="demo"]::before    { background: var(--warn); }
+.pill[data-mode="offline"]::before { background: var(--crit); }
+
+/* ---------- Grille ---------- */
+.grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; } /* grille à 12 colonnes, comme Bootstrap */
+.surface { /* style commun à toutes les "cartes" de l'interface */
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; padding: 22px;
+}
+.hero     { grid-column: span 7; }  /* le panneau photovoltaïque occupe 7 colonnes sur 12 */
+.readouts { grid-column: span 5; padding: 0; display: flex; flex-direction: column; } /* distance + luminosité, 5 colonnes */
+.history  { grid-column: span 12; } /* le graphique prend toute la largeur */
+.journal  { grid-column: span 7; }
+.config   { grid-column: span 5; }
+
+h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.muted { color: var(--muted); }
+
+/* ---------- Panneau (élément principal) ---------- */
+.hero { --state: var(--text); display: flex; flex-direction: column; } /* --state : couleur du mot d'état, changée ci-dessous */
+.hero[data-state="open"]    { --state: var(--ok); }    /* "Déployé" en couleur nominale */
+.hero[data-state="unknown"] { --state: var(--warn); }  /* "Inconnu" en couleur d'alerte */
+
+.hero svg { width: 100%; height: auto; display: block; margin: 8px 0 4px; }
+.state-word { /* le gros mot "Déployé"/"Rentré"/"Inconnu" */
+  margin: 0; font: 600 clamp(40px, 7vw, 60px)/1 var(--num); /* clamp : taille qui s'adapte entre 40px et 60px selon l'écran */
+  color: var(--state); transition: color .4s;
+}
+.state-sub { margin: 6px 0 0; color: var(--muted); }
+
+.wing { /* les deux "ailes" (panneaux solaires) du schéma SVG */
+  transform-box: fill-box; /* le point de pivot se calcule sur la forme elle-même, pas sur tout le SVG */
+  transition: transform .9s cubic-bezier(.65, 0, .25, 1), opacity .9s; /* anime le repli/déploiement */
+}
+#wingL { transform-origin: 100% 50%; } /* l'aile gauche pivote/rétrécit depuis son bord droit (contre le coffre) */
+#wingR { transform-origin: 0% 50%; }   /* l'aile droite depuis son bord gauche */
+svg[data-state="closed"] .wing  { transform: scaleX(.03); opacity: 0; } /* panneau fermé : ailes quasi invisibles */
+svg[data-state="unknown"] .wing { opacity: .25; } /* état inconnu : ailes semi-transparentes */
+#sun { transition: opacity .6s; } /* le soleil s'éclaircit/s'assombrit en douceur */
+.sun-stop { stop-color: var(--sun); } /* couleur du dégradé du halo du soleil */
+.sun-core { fill: var(--sun); } /* disque plein du soleil */
+.cell-bg { fill: var(--cell-bg); } /* fond de chaque cellule photovoltaïque */
+.cell-line { stroke: var(--cell-line); } /* traits de la grille des cellules */
+.wing-face { stroke: var(--wing-edge); } /* contour des ailes */
+.mast { fill: var(--mast); } /* mât et base */
+.bay { fill: var(--body-fill); stroke: var(--body-stroke); } /* coffre du panneau */
+.bay-inner { fill: var(--body-inner); stroke: var(--line); } /* partie intérieure du coffre */
+.bay-line { stroke: var(--line); } /* ligne de séparation dans le coffre */
+
+/* ---------- Bouton de thème ---------- */
+.theme-btn { /* bouton rond soleil/lune en haut à droite */
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; padding: 0; cursor: pointer;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 50%;
+}
+.theme-btn:hover { border-color: var(--muted); }
+.theme-btn svg {
+  width: 20px; height: 20px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.theme-btn .i-moon { display: none; } /* par défaut (thème sombre) on montre l'icône soleil, pas la lune */
+:root[data-theme="light"] .theme-btn .i-sun { display: none; }   /* en thème clair, cache le soleil... */
+:root[data-theme="light"] .theme-btn .i-moon { display: inline; } /* ...et montre la lune à la place */
+
+/* ---------- Mesures ---------- */
+.readout { padding: 22px; } /* un bloc "Distance" ou "Luminosité" */
+.readout + .readout { border-top: 1px solid var(--line); } /* ligne de séparation entre les deux blocs */
+.readout .label { color: var(--muted); font-size: 14px; }
+.readout .value-row { display: flex; align-items: baseline; gap: 6px; margin: 6px 0 12px; }
+.value { font: 600 56px/1 var(--num); font-variant-numeric: tabular-nums; } /* le gros chiffre */
+.unit  { font: 500 20px var(--num); color: var(--muted); } /* "cm" ou "%" à côté du chiffre */
+.note  { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.word  { margin-left: auto; font: 500 18px var(--num); color: var(--warn); } /* mot "Faible"/"Forte" aligné à droite */
+
+.track { /* la barre grise qui sert de fond à la jauge de distance */
+  position: relative; height: 8px; margin: 18px 0 6px;
+  background: var(--track); border-radius: 4px;
+}
+.marker { /* curseur mobile indiquant la distance mesurée */
+  position: absolute; top: -5px; left: 0; width: 4px; height: 18px;
+  background: var(--ok); border-radius: 2px; transform: translateX(-50%); /* centre le repère sur sa position "left" */
+  transition: left .4s;
+}
+.tick { /* petit repère fixe indiquant le seuil "rentré" configuré */
+  position: absolute; top: -3px; width: 2px; height: 14px;
+  background: var(--muted); transform: translateX(-50%);
+}
+.scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); } /* graduations 0/50/100 cm */
+
+.segs { display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; height: 20px; } /* 20 segments de la barre de luminosité */
+.segs span { background: var(--track); border-radius: 2px; transition: background .3s; } /* segment éteint par défaut */
+.segs span.on { background: var(--warn); } /* segment allumé (classe ajoutée en JS) */
+
+.alert { /* bandeau de message sous les mesures */
+  margin: auto 22px 22px; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface-2); font-size: 14px;
+}
+.alert[hidden] { display: none; } /* masqué quand il n'y a rien à signaler (attribut posé en JS) */
+.alert[data-level="warn"] { border-color: var(--warn); }
+.alert[data-level="crit"] { border-color: var(--crit); }
+.alert[data-level="info"] { border-color: var(--ok); }
+
+/* ---------- Historique ---------- */
+.history-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; margin-bottom: 12px; }
+.legend { display: flex; gap: 18px; font-size: 13px; color: var(--muted); } /* légende des deux courbes */
+.legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; margin-right: 8px; vertical-align: middle; } /* petit trait de couleur devant chaque légende */
+canvas { width: 100%; height: 220px; display: block; } /* zone de dessin du graphique historique */
+
+/* ---------- Dangers détectés ---------- */
+.dangers-head { display: flex; align-items: center; gap: 10px; } /* titre + compteur sur la même ligne */
+.dangers-count { /* badge rond affichant le nombre de dangers actifs */
+  background: var(--crit); color: #fff; border-radius: 999px;
+  padding: 2px 10px; font-size: 12px; font-weight: 600;
+}
+.dangers ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; } /* une carte par danger */
+.dangers li { /* une ligne = un danger détecté */
+  display: flex; gap: 12px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
+}
+.dangers li[data-level="warn"] { border-color: var(--warn); } /* alerte modérée */
+.dangers li[data-level="crit"] { border-color: var(--crit); } /* alerte critique */
+.dangers .dot { /* pastille de couleur devant chaque ligne, même logique que .pill::before */
+  width: 10px; height: 10px; border-radius: 50%; flex: none; margin-top: 5px;
+  background: var(--muted);
+}
+.dangers li[data-level="warn"] .dot { background: var(--warn); }
+.dangers li[data-level="crit"] .dot { background: var(--crit); }
+.dangers li strong { display: block; margin-bottom: 2px; } /* nom du danger */
+.dangers li p { margin: 0; color: var(--muted); font-size: 13px; } /* description du danger */
+#dangerEmpty { margin: 14px 0 0; color: var(--muted); font-size: 14px; } /* message quand tout va bien */
+.dangers ul:not(:empty) + #dangerEmpty { display: none; } /* cache le message dès qu'un danger est listé */
+
+/* ---------- Journal ---------- */
+.journal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; } /* titre + filtre sur la même ligne */
+.journal-head select { width: auto; padding: 5px 8px; font-size: 13px; } /* plus compact que les select du formulaire */
+.journal ul { list-style: none; margin: 12px 0 0; padding: 0; max-height: 210px; overflow: auto; } /* liste défilante des événements */
+.journal li { display: flex; gap: 14px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.journal li:first-child { border-top: 0; } /* pas de ligne au-dessus du tout premier événement */
+.journal time { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; } /* l'heure ne rétrécit jamais */
+.journal li[data-level="warn"] span { color: var(--warn); }
+.journal li[data-level="crit"] span { color: var(--crit); }
+/* filtre du journal : #log reçoit un attribut data-filter posé par app.js, on masque le reste en CSS */
+#log[data-filter="crit"] li:not([data-level="crit"]) { display: none; }
+#log[data-filter="warn"] li:not([data-level="warn"]) { display: none; }
+#log[data-filter="info"] li:not([data-level="info"]) { display: none; }
+
+/* ---------- Réglages ---------- */
+form { display: grid; gap: 14px; margin-top: 14px; }
+label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
+input[type="text"], input[type="number"], select {
+  width: 100%; padding: 9px 11px; color: var(--text); font: inherit;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+}
+.check { display: flex; align-items: center; gap: 10px; color: var(--text); } /* ligne "Mode démo" avec sa case à cocher */
+.check input { width: 18px; height: 18px; accent-color: var(--ok); }
+form button { /* bouton "Appliquer" */
+  justify-self: start; padding: 9px 18px; font: 600 14px var(--ui);
+  color: var(--on-ok); background: var(--ok); border: 0; border-radius: 8px; cursor: pointer;
+}
+form button:hover { filter: brightness(1.1); }
+:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; } /* contour visible au clavier (accessibilité) */
+
+@media (max-width: 900px) { /* sur petit écran, chaque carte prend toute la largeur (empilées verticalement) */
+  .hero, .readouts, .journal, .config { grid-column: span 12; }
+}
+@media (prefers-reduced-motion: reduce) { /* respecte le réglage "réduire les animations" du système */
+  * { transition: none !important; }
+}
