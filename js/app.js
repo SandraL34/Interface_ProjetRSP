@@ -391,7 +391,6 @@
   });
   applyTheme(root.getAttribute("data-theme"), false); // applique le thème initial (déjà posé par theme-init.js) sans le re-sauvegarder
 
-
   /* ---------- Démarrage ---------- */
   for (let i = 0; i < SEG; i++) $("segs").appendChild(document.createElement("span")); // crée les 20 petits segments de la barre de luminosité
   setTick(); // positionne le repère de seuil
