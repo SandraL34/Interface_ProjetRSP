@@ -101,6 +101,7 @@ h1 { margin: 0; font: 600 28px/1.1 var(--num); letter-spacing: .01em; }
 .history  { grid-column: span 12; } /* le graphique prend toute la largeur */
 .journal  { grid-column: span 7; }
 .config   { grid-column: span 5; }
+.manual   { grid-column: span 5; }
 
 h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .muted { color: var(--muted); }
@@ -152,6 +153,37 @@ svg[data-state="unknown"] .wing { opacity: .25; } /* état inconnu : ailes semi-
 :root[data-theme="light"] .theme-btn .i-sun { display: none; }   /* en thème clair, cache le soleil... */
 :root[data-theme="light"] .theme-btn .i-moon { display: inline; } /* ...et montre la lune à la place */
 
+/* ---------- Bouton de connexion ---------- */
+.login-btn { /* bouton "Connexion" dans l'en-tête, ouvre la fenêtre de connexion */
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 16px; cursor: pointer; font: 600 14px var(--ui);
+  color: var(--on-ok); background: var(--ok); border: 0; border-radius: 999px;
+}
+.login-btn:hover { filter: brightness(1.1); }
+.login-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.login-btn[data-logged="true"] { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); }
+
+/* ---------- Fenêtre de connexion (modale) ---------- */
+.modal-overlay { /* fond assombri qui couvre toute la page */
+  position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+  padding: 20px; background: rgba(0, 0, 0, .55);
+}
+.modal-overlay[hidden] { display: none; }
+.modal { /* la carte de connexion elle-même */
+  position: relative; width: 100%; max-width: 340px; padding: 26px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+}
+.modal h2 { margin: 0 0 16px; }
+.modal form { display: grid; gap: 14px; margin-top: 0; }
+.modal-close { /* bouton "×" en haut à droite de la modale */
+  position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 20px; line-height: 1; color: var(--muted); background: transparent; border: 0; border-radius: 8px; cursor: pointer;
+}
+.modal-close:hover { background: var(--surface-2); color: var(--text); }
+#loginError { color: var(--crit); }
+
 /* ---------- Mesures ---------- */
 .readout { padding: 22px; } /* un bloc "Distance" ou "Luminosité" */
 .readout + .readout { border-top: 1px solid var(--line); } /* ligne de séparation entre les deux blocs */
@@ -196,29 +228,18 @@ svg[data-state="unknown"] .wing { opacity: .25; } /* état inconnu : ailes semi-
 .legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; margin-right: 8px; vertical-align: middle; } /* petit trait de couleur devant chaque légende */
 canvas { width: 100%; height: 220px; display: block; } /* zone de dessin du graphique historique */
 
-/* ---------- Dangers détectés ---------- */
-.dangers-head { display: flex; align-items: center; gap: 10px; } /* titre + compteur sur la même ligne */
-.dangers-count { /* badge rond affichant le nombre de dangers actifs */
-  background: var(--crit); color: #fff; border-radius: 999px;
-  padding: 2px 10px; font-size: 12px; font-weight: 600;
+/* ---------- Contrôle manuel ---------- */
+.manual-actions { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.manual-btn { /* boutons "Déplier"/"Replier" utilisés en cas de perte de connexion */
+  flex: 1 1 140px; padding: 12px 18px; font: 600 14px var(--ui); cursor: pointer;
+  border-radius: 10px; border: 1px solid var(--line); color: var(--text); background: var(--surface-2);
+  transition: filter .15s, border-color .15s;
 }
-.dangers ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; } /* une carte par danger */
-.dangers li { /* une ligne = un danger détecté */
-  display: flex; gap: 12px; padding: 12px 14px;
-  border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2);
-}
-.dangers li[data-level="warn"] { border-color: var(--warn); } /* alerte modérée */
-.dangers li[data-level="crit"] { border-color: var(--crit); } /* alerte critique */
-.dangers .dot { /* pastille de couleur devant chaque ligne, même logique que .pill::before */
-  width: 10px; height: 10px; border-radius: 50%; flex: none; margin-top: 5px;
-  background: var(--muted);
-}
-.dangers li[data-level="warn"] .dot { background: var(--warn); }
-.dangers li[data-level="crit"] .dot { background: var(--crit); }
-.dangers li strong { display: block; margin-bottom: 2px; } /* nom du danger */
-.dangers li p { margin: 0; color: var(--muted); font-size: 13px; } /* description du danger */
-#dangerEmpty { margin: 14px 0 0; color: var(--muted); font-size: 14px; } /* message quand tout va bien */
-.dangers ul:not(:empty) + #dangerEmpty { display: none; } /* cache le message dès qu'un danger est listé */
+.manual-btn:hover { filter: brightness(1.08); }
+.manual-btn.deploy { border-color: var(--ok); }
+.manual-btn.retract { border-color: var(--crit); }
+.manual-btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+#manualStatus:empty { display: none; }
 
 /* ---------- Journal ---------- */
 .journal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; } /* titre + filtre sur la même ligne */
@@ -237,7 +258,7 @@ canvas { width: 100%; height: 220px; display: block; } /* zone de dessin du grap
 /* ---------- Réglages ---------- */
 form { display: grid; gap: 14px; margin-top: 14px; }
 label { display: grid; gap: 4px; font-size: 14px; color: var(--muted); }
-input[type="text"], input[type="number"], select {
+input[type="text"], input[type="number"], input[type="password"], select {
   width: 100%; padding: 9px 11px; color: var(--text); font: inherit;
   background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
 }
@@ -251,7 +272,7 @@ form button:hover { filter: brightness(1.1); }
 :focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; } /* contour visible au clavier (accessibilité) */
 
 @media (max-width: 900px) { /* sur petit écran, chaque carte prend toute la largeur (empilées verticalement) */
-  .hero, .readouts, .journal, .config { grid-column: span 12; }
+  .hero, .readouts, .journal, .config, .manual { grid-column: span 12; }
 }
 @media (prefers-reduced-motion: reduce) { /* respecte le réglage "réduire les animations" du système */
   * { transition: none !important; }

@@ -3,6 +3,7 @@
   const $ = id => document.getElementById(id); // raccourci : $("x") au lieu de document.getElementById("x")
   const KEY = "rsp-cfg"; // nom utilisé pour sauvegarder les réglages dans le localStorage du navigateur
   const CFG = { ip: "127.0.0.1:8000", interval: 1000, threshold: 10, demo: true }; // réglages par défaut si rien n'est encore enregistré
+  const ESP_IP = "10.213.28.233";
   try { Object.assign(CFG, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {} // on écrase CFG avec les réglages sauvegardés, s'il y en a
 
   const MAX_HIST = 90, MAX_DIST = 100, ADC_MAX = 1023, SEG = 20;
@@ -83,22 +84,7 @@
     return list;
   }
 
-  function renderDangers(list) { // met à jour la carte "Dangers détectés" et journalise les nouveaux dangers
-    const ul = $("dangerList");
-    ul.innerHTML = ""; // on repart d'une liste vide à chaque mesure
-    list.forEach(d => {
-      const li = document.createElement("li"); li.dataset.level = d.level;
-      const dot = document.createElement("span"); dot.className = "dot"; // pastille de couleur selon le niveau
-      const box = document.createElement("div");
-      const strong = document.createElement("strong"); strong.textContent = d.label;
-      const p = document.createElement("p"); p.textContent = d.detail || "";
-      box.append(strong, p); li.append(dot, box); ul.append(li);
-    });
-    $("dangerEmpty").hidden = list.length > 0; // masque le message "aucun danger" s'il y en a au moins un
-    const count = $("dangerCount");
-    count.hidden = list.length === 0;
-    count.textContent = list.length;
-
+  function renderDangers(list) { // journalise les nouveaux dangers détectés (plus de carte dédiée : voir contrôle manuel)
     const labels = list.map(d => d.label);
     labels.filter(l => !prevDangers.includes(l)).forEach(l => { // ne journalise que les dangers qui viennent d'apparaître
       const d = list.find(x => x.label === l);
@@ -106,6 +92,60 @@
     });
     prevDangers = labels; // mémorise pour la comparaison à la prochaine mesure
   }
+
+  /* ---------- Contrôle manuel (utile si l'ESP8266 ne répond plus) ---------- */
+  function applyManualState(open) { // force l'affichage du panneau sans attendre une mesure
+    panelOpen = open; lastOpen = open;
+    const st = open ? "open" : "closed";
+    $("hero").dataset.state = st;
+    $("panelSvg").dataset.state = st;
+    $("stateWord").textContent = open ? "Déployé" : "Rentré";
+    $("stateSub").textContent = open
+      ? "Commande manuelle : ailes sorties."
+      : "Commande manuelle : ailes rangées dans le coffre.";
+  }
+
+  async function manualCommand(action) { // "deploy" ou "retract", déclenché par les boutons du contrôle manuel
+    const open = action === "deploy";
+    const status = $("manualStatus");
+    status.textContent = "Commande envoyée…";
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 3000);
+    try {
+      const res = await fetch(`http://${ESP_IP}/api/command`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+        signal: ctrl.signal
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.message || "Commande refusée par l'ESP8266");
+      }
+
+      applyManualState(open);
+
+      log(
+        open
+          ? "Commande manuelle : déploiement confirmé par l'ESP8266."
+          : "Commande manuelle : repli confirmé par l'ESP8266.",
+        "warn"
+      );
+
+      status.textContent = "Commande confirmée par l’ESP8266.";
+    } catch (e) { // pas de réponse (ex. perte de connexion) : l'affichage reste forcé localement
+      status.textContent = "API injoignable : commande manuelle.";
+    } finally {
+      clearTimeout(to);
+    }
+  }
+
+  $("btnDeploy").addEventListener("click", () => manualCommand("deploy"));
+  $("btnRetract").addEventListener("click", () => manualCommand("retract"));
+
 
   /* ---------- Affichage d'une mesure ---------- */
   function render(s) { // met à jour toute l'interface à partir d'une mesure s = {distance_cm, luminosity, panel_open?}
@@ -330,28 +370,6 @@
     poll(gen);
 }
 
-  /* ---------- Réglages ---------- */
-  function fillForm() { // remplit le formulaire avec les valeurs actuelles de CFG
-    $("ip").value = CFG.ip;
-    $("interval").value = String(CFG.interval);
-    $("threshold").value = CFG.threshold;
-    $("demo").checked = CFG.demo;
-  }
-
-  $("cfgForm").addEventListener("submit", e => { // quand on clique sur "Appliquer"
-    e.preventDefault(); // empêche le rechargement de la page (comportement par défaut d'un formulaire)
-    const ip = $("ip").value.trim();
-    if (/^[\w.\-:]+$/.test(ip)) CFG.ip = ip; // n'accepte l'IP que si elle contient des caractères valides
-    CFG.interval = +$("interval").value || 1000; // fréquence de lecture choisie (ms), 1000 par défaut si invalide
-    CFG.threshold = clamp(+$("threshold").value || 10, 1, 200); // seuil "rentré" borné entre 1 et 200 cm
-    CFG.demo = $("demo").checked;
-    try { localStorage.setItem(KEY, JSON.stringify(CFG)); } catch (err) {} // sauvegarde les réglages pour la prochaine visite
-    fillForm(); // réaffiche le formulaire avec les valeurs nettoyées/bornées
-    hist = []; fails = 0; mode = null; lastOpen = null; lastAlert = null; prevDangers = []; // on repart sur une base propre
-    log(CFG.demo ? "Réglages appliqués (mode démo)." : `Réglages appliqués : ${CFG.ip}`);
-    restart(); // relance la boucle de lecture avec les nouveaux réglages
-  });
-
   /* ---------- Filtre du journal ---------- */
   $("logFilter").addEventListener("change", e => { // "Tous les niveaux" / "Critique" / "Attention" / "Info"
     $("log").dataset.filter = e.target.value; // le CSS masque les lignes qui ne correspondent pas (voir style.css)
@@ -374,9 +392,54 @@
   });
   applyTheme(root.getAttribute("data-theme"), false); // applique le thème initial (déjà posé par theme-init.js) sans le re-sauvegarder
 
+  /* ---------- Connexion (côté client, sans vérification serveur) ---------- */
+  const AUTH_KEY = "rsp-auth";
+  const overlay = $("loginOverlay"), loginBtn = $("loginBtn"), loginForm = $("loginForm"), loginError = $("loginError");
+  const getUser = () => { try { return localStorage.getItem(AUTH_KEY); } catch (e) { return null; } };
+
+  function setLoggedIn(user) { // met à jour le bouton d'en-tête selon l'état de connexion
+    loginBtn.dataset.logged = user ? "true" : "false";
+    $("loginBtnLabel").textContent = user ? user : "Connexion";
+    loginBtn.title = user ? "Cliquer pour se déconnecter" : "";
+  }
+
+  function openLogin() {
+    loginError.hidden = true; loginForm.reset();
+    overlay.hidden = false;
+    $("loginUser").focus();
+  }
+  function closeLogin() { overlay.hidden = true; }
+
+  loginBtn.addEventListener("click", () => {
+    if (getUser()) { // déjà connecté : le clic déconnecte directement
+      try { localStorage.removeItem(AUTH_KEY); } catch (e) {}
+      setLoggedIn(null);
+      log("Déconnexion.");
+    } else {
+      openLogin();
+    }
+  });
+  $("loginClose").addEventListener("click", closeLogin);
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeLogin(); }); // clic en dehors de la carte : ferme
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !overlay.hidden) closeLogin(); });
+
+  loginForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const user = $("loginUser").value.trim();
+    const pass = $("loginPass").value;
+    if (!user || !pass) { loginError.textContent = "Nom d’utilisateur et mot de passe requis."; loginError.hidden = false; return; }
+    // pas de backend d'authentification pour l'instant : toute paire non vide est acceptée
+    try { localStorage.setItem(AUTH_KEY, user); } catch (e) {}
+    setLoggedIn(user);
+    log(`Connecté en tant que « ${user} ».`);
+    closeLogin();
+  });
+
+  setLoggedIn(getUser());
+
   /* ---------- Démarrage ---------- */
   for (let i = 0; i < SEG; i++) $("segs").appendChild(document.createElement("span")); // crée les 20 petits segments de la barre de luminosité
-  fillForm(); setTick(); // affiche les réglages actuels et positionne le repère de seuil
+  setTick(); // positionne le repère de seuil
   setInterval(() => { $("clock").textContent = now(); }, 1000); // met à jour l'horloge affichée chaque seconde
   $("clock").textContent = now(); // affiche l'heure tout de suite, sans attendre la première seconde
   window.addEventListener("resize", drawChart); // redessine le graphique si la fenêtre change de taille
