@@ -213,7 +213,7 @@
 
     // Mise à jour de l'état mémorisé
     panelOpen = open;
-    
+
     // distance
     $("dist").textContent = dValid ? s.distance_cm.toFixed(1) : "—"; // affiche la valeur avec 1 décimale, ou un tiret si invalide
     $("distNote").textContent = dValid
@@ -463,4 +463,12 @@
   window.addEventListener("resize", drawChart); // redessine le graphique si la fenêtre change de taille
   log("Tableau de bord démarré."); // première ligne du journal
   restart(); // démarre la toute première boucle de lecture des mesures
+
+    /* ---------- Déconnexion ---------- */
+  $("logoutBtn").addEventListener("click", () => {
+    localStorage.removeItem("rsp-token");
+    window.location.href = "login.html";
+  });
+
+
 })();
