@@ -211,15 +211,12 @@
     const raw = clamp(Number(s.luminosity) || 0, 0, ADC_MAX); // valeur brute du capteur, sécurisée entre 0 et 1023
     const lum = Math.round(raw / ADC_MAX * 100); // conversion en pourcentage (0 à 100)
 
-    // hystérésis sur la luminosité : s'ouvre au-dessus de LUM_OPEN, se ferme en dessous de LUM_CLOSE
-    if (lum > LUM_OPEN) panelOpen = true; // assez de lumière : on ouvre
-    else if (lum < LUM_CLOSE) panelOpen = false; // pas assez de lumière : on ferme
-    else if (panelOpen === null) { // premier passage : pas encore d'état connu, on choisit une valeur de départ
-      panelOpen = typeof s.panel_open === "boolean" ? s.panel_open : (dValid && s.distance_cm >= CFG.threshold);
-    }
-    // priorité de sécurité : un obstacle trop proche force la fermeture, même si la luminosité dit "ouvrir"
-    if (dValid && s.distance_cm <= DIST_CLOSE) panelOpen = false;
-    const open = panelOpen; // état final retenu pour cette mesure
+      // ---------- État réel du panneau ----------
+    // L'ESP8266 est la source de vérité.
+    const open = s.panel_open;
+
+    // Mise à jour de l'état mémorisé
+    panelOpen = open;
 
     // distance
     $("dist").textContent = dValid ? s.distance_cm.toFixed(1) : "—"; // affiche la valeur avec 1 décimale, ou un tiret si invalide
@@ -382,7 +379,11 @@
         s = {
             distance_cm: Number(latest.distance),
             luminosity: Number(latest.light),
-            panel_open: Boolean(latest.panel_open),
+            panel_open:
+              latest.panel_open === true ||
+              latest.panel_open === 1 ||
+              latest.panel_open === "1" ||
+              latest.panel_open === "true",
             createdAt: latest.createdAt
         };
 
@@ -472,4 +473,12 @@
   window.addEventListener("resize", drawChart); // redessine le graphique si la fenêtre change de taille
   log("Tableau de bord démarré."); // première ligne du journal
   restart(); // démarre la toute première boucle de lecture des mesures
+
+    /* ---------- Déconnexion ---------- */
+  $("logoutBtn").addEventListener("click", () => {
+    localStorage.removeItem("rsp-token");
+    window.location.href = "login.html";
+  });
+
+
 })();
