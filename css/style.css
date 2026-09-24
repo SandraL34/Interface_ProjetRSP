@@ -241,6 +241,19 @@ canvas { width: 100%; height: 220px; display: block; } /* zone de dessin du grap
 .manual-btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
 #manualStatus:empty { display: none; }
 
+/* ---------- Alertes Telegram ---------- */
+.telegram-settings { grid-column: span 5; }
+.settings-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.telegram-status { padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.telegram-status[data-state="on"] { color: var(--ok); border-color: var(--ok); }
+.telegram-settings form { margin-top: 16px; }
+.telegram-settings input[type="text"] { width: 100%; }
+.check-label { display: flex; align-items: center; gap: 9px; color: var(--text); }
+.check-label input { width: 16px; height: 16px; accent-color: var(--ok); }
+.telegram-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.telegram-actions button { flex: 1 1 150px; }
+.secondary-btn { color: var(--text); background: var(--surface-2); border: 1px solid var(--line); }
+
 /* ---------- Journal ---------- */
 .journal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; } /* titre + filtre sur la même ligne */
 .journal-head select { width: auto; padding: 5px 8px; font-size: 13px; } /* plus compact que les select du formulaire */
@@ -272,7 +285,7 @@ form button:hover { filter: brightness(1.1); }
 :focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; } /* contour visible au clavier (accessibilité) */
 
 @media (max-width: 900px) { /* sur petit écran, chaque carte prend toute la largeur (empilées verticalement) */
-  .hero, .readouts, .journal, .config, .manual { grid-column: span 12; }
+  .hero, .readouts, .journal, .config, .manual, .telegram-settings { grid-column: span 12; }
 }
 @media (prefers-reduced-motion: reduce) { /* respecte le réglage "réduire les animations" du système */
   * { transition: none !important; }

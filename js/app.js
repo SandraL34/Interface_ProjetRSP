@@ -2,8 +2,8 @@
 (() => {
   const $ = id => document.getElementById(id); // raccourci : $("x") au lieu de document.getElementById("x")
   const KEY = "rsp-cfg"; // nom utilisé pour sauvegarder les réglages dans le localStorage du navigateur
-  const CFG = { ip: "127.0.0.1:8000", interval: 1000, threshold: 10, demo: true }; // réglages par défaut si rien n'est encore enregistré
-  const ESP_IP = "10.213.28.233";
+  const CFG = { ip: "127.0.0.1:8000", telegramApi: "127.0.0.1:8001", interval: 1000, threshold: 10, demo: true, telegramEnabled: false, telegramChatId: "" }; 
+  const ESP_IP = "10.213.28.233"; // adresse IP par défaut de l'ESP8266 (modifiable dans les réglages)
   try { Object.assign(CFG, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {} // on écrase CFG avec les réglages sauvegardés, s'il y en a
 
   const MAX_HIST = 90, MAX_DIST = 100, ADC_MAX = 1023, SEG = 20;
@@ -22,6 +22,8 @@
   let lastAlert = null;     // dernier texte d'alerte affiché, pour ne pas le rejouer dans le journal à chaque mesure
   let panelOpen = null;     // état retenu du panneau (résultat de l'hystérésis), mémorisé d'une mesure à l'autre
   let prevDangers = [];     // libellés des dangers affichés à la mesure précédente, pour ne logguer que les nouveaux
+  let telegramLastSent = 0;      // évite de renvoyer le même message pendant le délai anti-spam
+  let telegramLastSignature = ""; // signature du dernier groupe de dangers notifié
   const demoT0 = Date.now(); // instant de départ, utilisé comme horloge du mode démo
 
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v)); // force v à rester entre a et b
@@ -86,11 +88,64 @@
 
   function renderDangers(list) { // journalise les nouveaux dangers détectés (plus de carte dédiée : voir contrôle manuel)
     const labels = list.map(d => d.label);
-    labels.filter(l => !prevDangers.includes(l)).forEach(l => { // ne journalise que les dangers qui viennent d'apparaître
+    const newDangers = labels.filter(l => !prevDangers.includes(l));
+    newDangers.forEach(l => { // ne journalise que les dangers qui viennent d'apparaître
       const d = list.find(x => x.label === l);
       log(`Danger détecté : ${d.label}`, d.level === "crit" ? "crit" : "warn");
     });
+    if (newDangers.length) notifyTelegram(list.filter(d => newDangers.includes(d.label)));
     prevDangers = labels; // mémorise pour la comparaison à la prochaine mesure
+  }
+
+  function updateTelegramStatus() {
+    const enabled = Boolean(CFG.telegramEnabled && CFG.telegramChatId);
+    $("telegramStatus").dataset.state = enabled ? "on" : "off";
+    $("telegramStatus").textContent = enabled ? "Activées" : "Désactivées";
+    $("telegramEnabled").checked = Boolean(CFG.telegramEnabled);
+    $("telegramChatId").value = CFG.telegramChatId || "";
+  }
+
+  async function sendTelegram(message, isTest = false) {
+    if (!CFG.telegramChatId) {
+      $("telegramMessage").textContent = "Ajoutez un Chat ID Telegram avant l’envoi.";
+      return false;
+    }
+    try {
+      const response = await fetch(`http://${CFG.telegramApi}/api/alerts/telegram`, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ chatId: CFG.telegramChatId, message, test: isTest })
+      });
+      if (!response.ok) {
+        let detail = "HTTP " + response.status;
+        try {
+          const errorBody = await response.json();
+          detail = (errorBody.telegram && errorBody.telegram.description)
+            || errorBody.error
+            || errorBody.detail
+            || detail;
+        } catch (e) {}
+        throw new Error(detail);
+      }
+      $("telegramMessage").textContent = isTest ? "Message Telegram de test envoyé." : "Alerte Telegram envoyée.";
+      log(isTest ? "Message Telegram de test envoyé." : "Alerte Telegram envoyée.");
+      return true;
+    } catch (e) {
+      $("telegramMessage").textContent = "Échec Telegram : " + e.message;
+      if (isTest) log("Échec du message Telegram : " + e.message, "warn");
+      return false;
+    }
+  }
+
+  function notifyTelegram(dangers) {
+    if (!CFG.telegramEnabled || !CFG.telegramChatId) return;
+    const signature = dangers.map(d => d.label).join("|");
+    const nowMs = Date.now();
+    if (signature === telegramLastSignature && nowMs - telegramLastSent < 10 * 60 * 1000) return;
+    telegramLastSignature = signature;
+    telegramLastSent = nowMs;
+    const details = dangers.map(d => `${d.label}: ${d.detail}`).join("\n");
+    sendTelegram(`RSP - ALERTE\n${details}`);
   }
 
   /* ---------- Contrôle manuel (utile si l'ESP8266 ne répond plus) ---------- */
@@ -107,6 +162,8 @@
 
   async function manualCommand(action) { // "deploy" ou "retract", déclenché par les boutons du contrôle manuel
     const open = action === "deploy";
+    applyManualState(open);
+    log(open ? "Commande manuelle : déploiement forcé du panneau." : "Commande manuelle : repli forcé du panneau.", "warn");
     const status = $("manualStatus");
     status.textContent = "Commande envoyée…";
     const ctrl = new AbortController();
@@ -119,25 +176,9 @@
         signal: ctrl.signal
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
-
-      const data = await res.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "Commande refusée par l'ESP8266");
-      }
-
-      applyManualState(open);
-
-      log(
-        open
-          ? "Commande manuelle : déploiement confirmé par l'ESP8266."
-          : "Commande manuelle : repli confirmé par l'ESP8266.",
-        "warn"
-      );
-
       status.textContent = "Commande confirmée par l’ESP8266.";
     } catch (e) { // pas de réponse (ex. perte de connexion) : l'affichage reste forcé localement
-      status.textContent = "API injoignable : commande manuelle.";
+      status.textContent = "ESP8266 injoignable : commande appliquée seulement à l’affichage.";
     } finally {
       clearTimeout(to);
     }
@@ -145,6 +186,19 @@
 
   $("btnDeploy").addEventListener("click", () => manualCommand("deploy"));
   $("btnRetract").addEventListener("click", () => manualCommand("retract"));
+
+  $("telegramForm").addEventListener("submit", e => {
+    e.preventDefault();
+    CFG.telegramChatId = $("telegramChatId").value.trim();
+    CFG.telegramEnabled = $("telegramEnabled").checked;
+    try { localStorage.setItem(KEY, JSON.stringify(CFG)); } catch (e) {}
+    updateTelegramStatus();
+    $("telegramMessage").textContent = CFG.telegramEnabled
+      ? "Alertes Telegram activées."
+      : "Alertes Telegram désactivées.";
+  });
+
+  $("telegramTest").addEventListener("click", () => sendTelegram("RSP - message Telegram de test : la liaison d’alerte fonctionne.", true));
 
 
   /* ---------- Affichage d'une mesure ---------- */
@@ -154,9 +208,13 @@
     const lum = Math.round(raw / ADC_MAX * 100); // conversion en pourcentage (0 à 100)
 
     // hystérésis sur la luminosité : s'ouvre au-dessus de LUM_OPEN, se ferme en dessous de LUM_CLOSE
-    if (typeof s.panel_open === "boolean") {
-      panelOpen = s.panel_open;
+    if (lum > LUM_OPEN) panelOpen = true; // assez de lumière : on ouvre
+    else if (lum < LUM_CLOSE) panelOpen = false; // pas assez de lumière : on ferme
+    else if (panelOpen === null) { // premier passage : pas encore d'état connu, on choisit une valeur de départ
+      panelOpen = typeof s.panel_open === "boolean" ? s.panel_open : (dValid && s.distance_cm >= CFG.threshold);
     }
+    // priorité de sécurité : un obstacle trop proche force la fermeture, même si la luminosité dit "ouvrir"
+    if (dValid && s.distance_cm <= DIST_CLOSE) panelOpen = false;
     const open = panelOpen; // état final retenu pour cette mesure
 
     // distance
@@ -264,18 +322,14 @@
   function demoSample() { // génère une fausse mesure réaliste, utilisée quand "Mode démo" est coché
     const t = (Date.now() - demoT0) / 1000; // secondes écoulées depuis le démarrage du tableau de bord
     const open = (t % 24) < 15;                       // cycle de 24 s : 15 s "déployé", 9 s "rentré"
-    const d = (open ? 32 : 5) + Math.sin(t * 1.7) * 1.2 + Math.random() * .8; // distance simulée avec un peu de bruit
+    const d = open ? 32 + Math.sin(t * 1.7) * 1.2 : 3.5 + Math.random() * .4; // simule un obstacle proche pendant la phase repliée
     let lum = 620 + Math.sin(t / 4) * 260 + (Math.random() - .5) * 20; // luminosité simulée qui varie lentement
     const m = t % 60;
     if (m > 44 && m < 52) lum = 60 + Math.random() * 20;   // simule une "éclipse" (chute brutale de lumière) 8 s par minute
-    const dangers = []; // dangers fictifs, pour visualiser la carte "Dangers détectés" en mode démo
-    if (t % 90 < 6) dangers.push({ level: "warn", label: "Radiation solaire élevée", detail: "Capteur de radiations au-dessus du seuil nominal (simulation)." });
-    if (t % 150 < 4) dangers.push({ level: "crit", label: "Risque de micro-météorite", detail: "Trajectoire détectée à proximité du vaisseau (simulation)." });
     return {
       distance_cm: +d.toFixed(1), // arrondi à 1 décimale
       luminosity: Math.round(clamp(lum, 0, ADC_MAX)), // valeur brute bornée entre 0 et 1023
-      panel_open: open,
-      dangers
+      panel_open: open
     };
   }
 
@@ -293,8 +347,8 @@
                 signal: ctrl.signal,
                 cache: "no-store",
                 headers: {
-                    "Authorization": `Bearer ${localStorage.getItem("rsp-token")}`
-                }
+                "Authorization": `Bearer ${localStorage.getItem("rsp-token")}`
+              }
             }
         );
 
@@ -332,8 +386,12 @@
         console.error("Erreur API :", e);
         fails++;
 
-        if (fails >= 2) {
-            setMode("offline");
+      if (CFG.demo) {
+        s = demoSample();
+        fails = 0;
+        setMode("demo");
+      } else if (fails >= 2) {
+        setMode("offline");
         }
 
     } finally {
@@ -363,6 +421,8 @@
     lastOpen = null;
     lastAlert = null;
     prevDangers = [];
+    telegramLastSignature = "";
+    telegramLastSent = 0;
     panelOpen = null;
 
     // Démarre une nouvelle boucle
@@ -391,6 +451,9 @@
   });
   applyTheme(root.getAttribute("data-theme"), false); // applique le thème initial (déjà posé par theme-init.js) sans le re-sauvegarder
 
+  
+  updateTelegramStatus();
+
   /* ---------- Démarrage ---------- */
   for (let i = 0; i < SEG; i++) $("segs").appendChild(document.createElement("span")); // crée les 20 petits segments de la barre de luminosité
   setTick(); // positionne le repère de seuil
@@ -399,12 +462,4 @@
   window.addEventListener("resize", drawChart); // redessine le graphique si la fenêtre change de taille
   log("Tableau de bord démarré."); // première ligne du journal
   restart(); // démarre la toute première boucle de lecture des mesures
-
-  /* ---------- Déconnexion ---------- */
-    $("logoutBtn").addEventListener("click", () => {
-    try {
-      localStorage.removeItem("rsp-token");
-    } catch (e) {}
-    window.location.href = "login.html";
-  });
 })();

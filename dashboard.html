@@ -140,6 +140,31 @@
       <!-- mis à jour par app.js après chaque commande manuelle -->
     </section>
 
+    <section class="surface telegram-settings" aria-labelledby="h-telegram">
+      <div class="settings-head">
+        <div>
+          <h2 id="h-telegram">Alertes Telegram</h2>
+          <p class="note">Recevez un message Telegram lorsqu’un nouveau danger est détecté.</p>
+        </div>
+        <span class="telegram-status" id="telegramStatus" data-state="off">Désactivées</span>
+      </div>
+      <form id="telegramForm">
+        <label for="telegramChatId">Chat ID Telegram
+          <input type="text" id="telegramChatId" name="chatId" placeholder="Ex. 123456789" inputmode="numeric">
+        </label>
+        <label class="check-label">
+          <input type="checkbox" id="telegramEnabled" name="enabled">
+          Activer les alertes Telegram
+        </label>
+        <div class="telegram-actions">
+          <button type="submit">Enregistrer</button>
+          <button type="button" class="secondary-btn" id="telegramTest">Envoyer un message test</button>
+        </div>
+      </form>
+      <p class="note" id="telegramMessage" aria-live="polite">Le bot Telegram doit être configuré côté serveur.</p>
+    </section>
+
+
     <!-- Journal -->
     <section class="surface journal" aria-labelledby="h-log">
       <div class="journal-head">
