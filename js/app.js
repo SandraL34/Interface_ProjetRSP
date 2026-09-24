@@ -98,6 +98,7 @@
   }
 
   function updateTelegramStatus() {
+    // Synchronise les contrôles Telegram avec les réglages actuellement mémorisés.
     const enabled = Boolean(CFG.telegramEnabled && CFG.telegramChatId);
     $("telegramStatus").dataset.state = enabled ? "on" : "off";
     $("telegramStatus").textContent = enabled ? "Activées" : "Désactivées";
@@ -106,6 +107,7 @@
   }
 
   async function sendTelegram(message, isTest = false) {
+    // Envoie une alerte au relais local et affiche le résultat dans le formulaire.
     if (!CFG.telegramChatId) {
       $("telegramMessage").textContent = "Ajoutez un Chat ID Telegram avant l’envoi.";
       return false;
@@ -117,6 +119,7 @@
         body: JSON.stringify({ chatId: CFG.telegramChatId, message, test: isTest })
       });
       if (!response.ok) {
+        // Essaie de récupérer le détail JSON fourni par le relais avant d'utiliser le statut HTTP.
         let detail = "HTTP " + response.status;
         try {
           const errorBody = await response.json();
@@ -138,6 +141,7 @@
   }
 
   function notifyTelegram(dangers) {
+    // Évite de renvoyer la même combinaison de dangers pendant dix minutes.
     if (!CFG.telegramEnabled || !CFG.telegramChatId) return;
     const signature = dangers.map(d => d.label).join("|");
     const nowMs = Date.now();
@@ -335,12 +339,14 @@
 
   /* ---------- Lecture périodique ---------- */
   async function poll(myGen) {
+    // Lit la dernière mesure de l'API, avec un repli vers le mode démo ou hors ligne.
     let s = null;
 
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 3000);
 
     try {
+      // Interroge l'API sans cache et transmet le JWT de la session courante.
         const response = await fetch(
             "http://127.0.0.1:8000/api/measurements",
             {
@@ -358,6 +364,7 @@
 
         const measurements = await response.json();
 
+        // Une réponse vide ne permet pas d'actualiser l'état du panneau.
         if (!Array.isArray(measurements) || measurements.length === 0) {
             throw new Error("Aucune mesure reçue");
         }
@@ -383,6 +390,7 @@
         setMode("live");
 
     } catch (e) {
+      // Compte les échecs et choisit le mode démo ou hors ligne selon la configuration.
         console.error("Erreur API :", e);
         fails++;
 
@@ -399,6 +407,7 @@
     }
 
     if (myGen !== gen) {
+      // Ignore le résultat d'une ancienne boucle arrêtée par un changement de configuration.
         return;
     }
 
@@ -412,6 +421,7 @@
   }
 
   function restart() {
+    // Invalide l'ancienne boucle et remet à zéro les états dérivés de la connexion.
     gen++;
     clearTimeout(timer);
 
@@ -425,7 +435,7 @@
     telegramLastSent = 0;
     panelOpen = null;
 
-    // Démarre une nouvelle boucle
+    // Démarre une nouvelle boucle de lecture avec son identifiant de génération.
     poll(gen);
 }
 

@@ -3,6 +3,7 @@
   var t = null; // thème qu'on va appliquer : "light" ou "dark"
   try { t = localStorage.getItem("rsp-theme"); } catch (e) {} // récupère le choix précédent de l'utilisateur, si présent
   if (t !== "light" && t !== "dark") { // aucun choix valide enregistré : on se base sur le système
+    // Utilise la préférence claire ou sombre du système lorsqu'aucun choix local n'existe.
     t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
   }
   document.documentElement.setAttribute("data-theme", t); // applique le thème sur <html> avant que la page ne s'affiche
