@@ -2,8 +2,17 @@
 (() => {
   const $ = id => document.getElementById(id); // raccourci : $("x") au lieu de document.getElementById("x")
   const KEY = "rsp-cfg"; // nom utilisé pour sauvegarder les réglages dans le localStorage du navigateur
-  const CFG = { ip: "127.0.0.1:8000", telegramApi: "127.0.0.1:8001", interval: 1000, threshold: 10, demo: true, telegramEnabled: false, telegramChatId: "" }; 
-  const ESP_IP = "10.213.28.233"; // adresse IP par défaut de l'ESP8266 (modifiable dans les réglages)
+  const CFG = { 
+    ip: window.RSP_CONFIG?.API_BASE.replace("http://", "") || "127.0.0.1:8000", 
+    telegramApi: window.RSP_CONFIG?.TELEGRAM_API.replace("http://", "") || "127.0.0.1:8001",
+    interval: 1000, 
+    threshold: 10, 
+    demo: false, 
+    telegramEnabled: false, 
+    telegramChatId: "" 
+  }; 
+  const ESP_IP = window.RSP_CONFIG?.ESP_IP || "10.213.28.233"; // adresse IP par défaut de l'ESP8266 (modifiable dans les réglages)
+  const API_BASE = window.RSP_CONFIG?.API_BASE || "http://127.0.0.1:8000";
   try { Object.assign(CFG, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {} // on écrase CFG avec les réglages sauvegardés, s'il y en a
 
   const MAX_HIST = 90, MAX_DIST = 100, ADC_MAX = 1023, SEG = 20;
@@ -11,8 +20,8 @@
   // MAX_DIST : distance (cm) qui correspond au bord droit de la jauge/graphique
   // ADC_MAX  : valeur brute maximale renvoyée par le capteur de luminosité (résolution 10 bits = 0 à 1023)
   // SEG      : nombre de petits segments dans la barre de luminosité
-  const LUM_OPEN = 80, LUM_CLOSE = 70;   // hystérésis : le panneau s'ouvre au-dessus de 80 %, se ferme en dessous de 70 %
-  const DIST_CLOSE = 5;                  // si un obstacle est détecté à 5 cm ou moins, on force la fermeture (sécurité)
+  const LUM_OPEN = 50, LUM_CLOSE = 50;   // hystérésis : le panneau s'ouvre au-dessus de 80 %, se ferme en dessous de 30 %
+  const DIST_CLOSE = 20;                  // si un obstacle est détecté à 5 cm ou moins, on force la fermeture (sécurité)
   let hist = [];        // tableau des dernières mesures {d: distance, l: luminosité} pour tracer le graphique
   let mode = null;      // état de connexion actuel : "live" | "demo" | "offline"
   let fails = 0;        // compteur d'échecs consécutifs de connexion à l'ESP8266
@@ -319,19 +328,26 @@
     }
   }
 
-  /* ---------- Mesures fictives (mode démo) ---------- */
-  function demoSample() { // génère une fausse mesure réaliste, utilisée quand "Mode démo" est coché
-    const t = (Date.now() - demoT0) / 1000; // secondes écoulées depuis le démarrage du tableau de bord
-    const open = (t % 24) < 15;                       // cycle de 24 s : 15 s "déployé", 9 s "rentré"
-    const d = open ? 32 + Math.sin(t * 1.7) * 1.2 : 3.5 + Math.random() * .4; // simule un obstacle proche pendant la phase repliée
-    let lum = 620 + Math.sin(t / 4) * 260 + (Math.random() - .5) * 20; // luminosité simulée qui varie lentement
+  let demoOpen = false; // état simulé du panneau (mémorisé pour l'hystérésis)
+
+  function demoSample() {
+    const t = (Date.now() - demoT0) / 1000;
+
+    // Luminosité simulée (brute 0-1023), avec une "éclipse" 8 s par minute
+    let lumRaw = 620 + Math.sin(t / 4) * 260 + (Math.random() - .5) * 20;
     const m = t % 60;
-    if (m > 44 && m < 52) lum = 60 + Math.random() * 20;   // simule une "éclipse" (chute brutale de lumière) 8 s par minute
-    return {
-      distance_cm: +d.toFixed(1), // arrondi à 1 décimale
-      luminosity: Math.round(clamp(lum, 0, ADC_MAX)), // valeur brute bornée entre 0 et 1023
-      panel_open: open
-    };
+    if (m > 44 && m < 52) lumRaw = 60 + Math.random() * 20;
+    lumRaw = Math.round(clamp(lumRaw, 0, ADC_MAX));
+    const lum = lumRaw / ADC_MAX * 100; // en %
+
+    // Décision avec hystérésis, comme le ferait l'ESP
+    if (!demoOpen && lum >= LUM_OPEN) demoOpen = true;
+    else if (demoOpen && lum <= LUM_CLOSE) demoOpen = false;
+
+    // La distance suit l'état simulé du panneau
+    const d = demoOpen ? 32 + Math.sin(t * 1.7) * 1.2 : 3.5 + Math.random() * .4;
+
+    return { distance_cm: +d.toFixed(1), luminosity: lumRaw, panel_open: demoOpen };
   }
 
   /* ---------- Lecture périodique ---------- */
@@ -345,7 +361,7 @@
     try {
       // Interroge l'API sans cache et transmet le JWT de la session courante.
         const response = await fetch(
-            "http://127.0.0.1:8000/api/measurements",
+            `${API_BASE}/api/measurements`,
             {
                 signal: ctrl.signal,
                 cache: "no-store",

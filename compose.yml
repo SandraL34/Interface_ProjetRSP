@@ -1,0 +1,29 @@
+services:
+  # 1. Le serveur Web pour votre interface JavaScript (Dashboard)
+  frontend:
+    build: .
+    container_name: projet_rsp_frontend
+    restart: always
+    ports:
+      - "3000:80" # Votre Dashboard est accessible sur http://localhost:3000
+    volumes:
+      # Lie vos fichiers locaux pour voir vos changements CSS/JS en temps réel
+      - .:/usr/share/nginx/html
+      # Montage spécifique pour sortir et modifier la configuration facilement
+      - ./config.js:/usr/share/nginx/html/config.js
+
+  # 2. L'API d'alerte Python Telegram
+  telegram_bot:
+    image: python:3.11-slim
+    container_name: projet_rsp_telegram
+    restart: always
+    ports:
+      - "8001:8001" # L'API Python écoute sur le port 8001
+    volumes:
+      - .:/app
+    working_dir: /app
+    # Docker injecte le token du fichier .env dans l'environnement du conteneur
+    env_file:
+      - .env
+    # Installe les dépendances requises et lance le serveur d'alertes
+    command: sh -c "pip install requests && python telegram_server.py"
